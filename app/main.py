@@ -3,6 +3,31 @@ from fastapi.params import Body
 from pydantic import BaseModel
 from typing import Optional
 from random import randrange
+import psycopg
+import time
+
+
+# Connecting to an existing DB using psycopg happens through: with psycopg.connect("dbname=test user=postgres") as conn:
+# 'with' keyword closes the file or the connection after we are done working with it
+
+# create the connection object using psycopg.connect()
+# wrap this whole thing into a try/except block:
+
+try:
+    with psycopg.connect("dbname=fast-api-demo user=postgres") as conn:
+        # create the cursor object using conn.cursor
+        with conn.cursor() as cur:
+            print("database connection successful")
+
+except Exception as error:
+    print("Error: ", error)
+    print("Timeing out for 3s")
+    time.sleep(3)
+
+
+
+
+
 
 my_posts = [{
     "title": "title of post 1",
