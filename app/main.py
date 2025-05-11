@@ -39,6 +39,10 @@ def create_posts(post: schemas.PostCreate, db: Session = Depends(get_db)):
 
     # create the Post structure using the Post object
     new_post = models.Post(**post.model_dump())
+    db.add(new_post)
+    db.commit()
+    db.refresh(new_post)
+
     return new_post
 
 # DELETE a post
