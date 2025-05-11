@@ -1,60 +1,17 @@
-from fastapi import FastAPI, Response, status, HTTPException
+from fastapi import FastAPI, Response, status, HTTPException, Depends
 from fastapi.params import Body
-from pydantic import BaseModel
 from typing import Optional
 from random import randrange
 import psycopg
 import time
+from . import models, schemas
+from sqlalchemy.orm import Session
+from .database import engine, get_db
 
+models.Base.metadata.create_all(bind=engine)
 
-# Connecting to an existing DB using psycopg happens through: with psycopg.connect("dbname=test user=postgres") as conn:
-# 'with' keyword closes the file or the connection after we are done working with it
-
-# create the connection object using psycopg.connect()
-# wrap this whole thing into a try/except block:
-
-try:
-    with psycopg.connect("dbname=fast-api-demo user=postgres") as conn:
-        # create the cursor object using conn.cursor
-        with conn.cursor() as cur:
-            print("database connection successful")
-
-except Exception as error:
-    print("Error: ", error)
-    print("Timeing out for 3s")
-    time.sleep(3)
-
-
-
-
-
-
-my_posts = [{
-    "title": "title of post 1",
-    "content": "content of post 1",
-    "id": 1
-    },
-    {
-    "title": "my fav foods",
-    "content": "pizza and burgers",
-    "id": 2
-    }]
-
-def find_post(id):
-    for p in my_posts:
-        if p['id'] == id:
-            return p
-
-def find_post_index(id):
-    for i, p in enumerate(my_posts):
-        if p['id'] == id:
-            return i
-
-class Post(BaseModel):
-    title: str
-    content: str
-    published: bool = True
-    rating: Optional[int] = None
+# let's simplify this by first creating the connection string, and then for each of the API requests, we close and open the connection
+conn_string = "dbname=fast-api-demo user=postgres"
 
 # to create an instance, run app = FastAPI()
 app = FastAPI()
@@ -63,64 +20,56 @@ app = FastAPI()
 async def root():
     return {"message": "welcome to my API"}
 
-# GET all posts
+# NEWEST GET all posts
 @app.get("/posts")
-def get_posts():
-    return {"data": my_posts}
+def get_posts(db: Session = Depends(get_db)):
+    posts = db.query(models.Post).all()
+    return posts
 
-# GET latest post
-@app.get("/posts/latest")
-def latest_post():
-    post = my_posts[len(my_posts)-1]
-    return {"post detail": post}
-
-# How to tell the FE that the post with this id doesn't exist??
-# Give it a 404 error
-# GET specific post
+# NEWEST GET specific post 
 @app.get("/posts/{id}")
-def get_post(id: int, response: Response):
-    post = find_post(int(id))
-    if not post:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
-                            detail=f"post with id: {id} was not found")
-    return {"post detail": post}
+def get_post(id: int, db: Session = Depends(get_db)):
+    post = db.query(models.Post).filter(models.Post.id == id).first()
+    return post
 
-# POST a new post
-@app.post("/posts", status_code=status.HTTP_201_CREATED)
-def create_posts(post: Post):
-    post_dict = post.model_dump()
-    post_dict['id'] = randrange(0, 10000000)
-    my_posts.append(post_dict)
-    return {"data": post_dict}
+
+# NEWEST POST a new post -- unpacking a dict happens through **
+@app.post("/posts", status_code=status.HTTP_201_CREATED, response_model=schemas.Post)
+def create_posts(post: schemas.PostCreate, db: Session = Depends(get_db)):
+
+    # create the Post structure using the Post object
+    new_post = models.Post(**post.model_dump())
+    return new_post
 
 # DELETE a post
 @app.delete("/posts/{id}", status_code = status.HTTP_204_NO_CONTENT)
-def delete_post(id: int):
-    index = find_post_index(id)
+def delete_post(id: int, db: Session = Depends(get_db)):
 
-    if index == None:
+    deleted_post = db.query(models.Post).filter(models.Post.id == id)
+
+    if not deleted_post.first():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
-                            detail=f"post with id {id} was not found")
-    my_posts.pop(index)
+                        detail=f"post with id {id} was not found")
+    
+    deleted_post.delete(synchronize_session=False)
+    db.commit()
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
-# update (PUT) request for a post
+# NEWEST (PUT) request for a post
 @app.put("/posts/{id}")
-def update_post(id: int, post: Post):
-    index = find_post_index(id)
+def update_post(id: int, post: schemas.PostCreate, db: Session = Depends(get_db)):
 
-    # error handling in the case of  missing index
-    if index == None:
+    post_query = db.query(models.Post).filter(models.Post.id == id)
+
+    updated_post = post_query.first()
+
+    if updated_post == None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail=f"post with id: {id} was not found")
+    
+    post_query.update(post.model_dump(), synchronize_session=False)
 
-    post_dict = post.dict()
-    post_dict['id'] = id
-    my_posts[index] = post_dict
-    return {"data": post_dict}
+    db.commit()
 
-
-#  CRUD -> Create, Read, Update, Delete
-
-# {id} is a path parameter
+    return post
