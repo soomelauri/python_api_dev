@@ -1,11 +1,12 @@
 from fastapi import Response, status, HTTPException, Depends, APIRouter
 from typing import List
-from .. import models, schemas
+from .. import models, schemas, oauth2
 from sqlalchemy.orm import Session
 from ..database import get_db
 
 router = APIRouter(
-    prefix="/posts"
+    prefix="/posts",
+    tags=['Posts']
 )
 
 # NEWEST GET all posts
@@ -23,7 +24,9 @@ def get_post(id: int, db: Session = Depends(get_db)):
 
 # NEWEST POST a new post -- unpacking a dict happens through **
 @router.post("/", status_code=status.HTTP_201_CREATED, response_model=schemas.Post)
-def create_posts(post: schemas.PostCreate, db: Session = Depends(get_db)):
+def create_posts(post: schemas.PostCreate, 
+                 db: Session = Depends(get_db), 
+                 get_current_user: int = Depends(oauth2.get_current_user())):
 
     # create the Post structure using the Post object
     new_post = models.Post(**post.model_dump())
