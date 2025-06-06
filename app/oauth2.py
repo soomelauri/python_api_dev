@@ -3,6 +3,8 @@ from datetime import datetime, timedelta
 from . import schemas
 from fastapi import Depends, status, HTTPException
 from fastapi.security import OAuth2PasswordBearer
+from datetime import datetime, timezone
+
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl='login')
 
@@ -17,7 +19,7 @@ def create_access_token(data: dict):
     # In order to create the encoded jwt, we first make a copy of the inputted dictionary object (data)
     to_encode = data.copy()
     # then we use the imported datetime module to: create an expire time by taking this moment + 30min
-    expire = datetime.now() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     # then we add the expire time to the dict using update
     # remember that in order to update with the new object inside the dict, we need to do it with {"expire": expire}
     to_encode.update({"exp": expire})
@@ -28,15 +30,20 @@ def create_access_token(data: dict):
 
 def verify_access_token(token: str, credentials_exception):
     try:
-
-        payload = jwt.decode(token, SECRET_KEY, algorithms=ALGORITHM)
+        print("before decoding")
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        print("after decoding")
         id: str = payload.get("user_id")
+        print("before checking if id exists")
 
         if id is None:
             raise credentials_exception
+        print("after checking if id exists")
         token_data = schemas.TokenData(id=id)
+        print("after storing to token_data")
 
-    except JWTError:
+    except JWTError as e:
+        print(f"JWTError occurred: {e}")
         raise credentials_exception
     
     return token_data
