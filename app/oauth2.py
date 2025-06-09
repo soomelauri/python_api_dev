@@ -5,43 +5,32 @@ from fastapi import Depends, status, HTTPException
 from fastapi.security import OAuth2PasswordBearer
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
+from .config import settings
 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl='login')
-
-# SECRET KEY
-SECRET_KEY = "09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7"
-# Algorithm
-ALGORITHM = "HS256"
-# Expiration Time
-ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
 def create_access_token(data: dict):
     # In order to create the encoded jwt, we first make a copy of the inputted dictionary object (data)
     to_encode = data.copy()
     # then we use the imported datetime module to: create an expire time by taking this moment + 30min
-    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_expire_minutes)
     # then we add the expire time to the dict using update
     # remember that in order to update with the new object inside the dict, we need to do it with {"expire": expire}
     to_encode.update({"exp": expire})
     # then we encode it
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    encoded_jwt = jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
 
     return encoded_jwt
 
 def verify_access_token(token: str, credentials_exception):
     try:
-        print("before decoding")
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        print("after decoding")
+        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
         id: str = payload.get("user_id")
-        print("before checking if id exists")
 
         if id is None:
             raise credentials_exception
-        print("after checking if id exists")
         token_data = schemas.TokenData(id=id)
-        print("after storing to token_data")
 
     except JWTError as e:
         print(f"JWTError occurred: {e}")
